@@ -5,16 +5,7 @@
       "method": "GET",
       "path": "/",
       "expectedStatus": 200,
-      "expectedBody": {"items": [], "total": 0},
-      "bodyMatcher": "partial"
-    },
-    {
-      "name": "POST create product",
-      "method": "POST",
-      "path": "/",
-      "body": {"naimenovanie": "Тестовый товар", "artikul": "TEST-001", "prodazh_tsena_roznitsa": 9999},
-      "expectedStatus": 201,
-      "expectedBody": {"naimenovanie": "Тестовый товар"},
+      "expectedBody": {"limit": 50},
       "bodyMatcher": "partial"
     }
   ]

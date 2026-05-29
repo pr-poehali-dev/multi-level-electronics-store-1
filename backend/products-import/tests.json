@@ -1,0 +1,17 @@
+{
+  "tests": [
+    {
+      "name": "POST import CSV",
+      "method": "POST",
+      "path": "/",
+      "body": {
+        "file_base64": "bmFpbWVub3ZhbmllO2FydGlrdWw7dHN2ZXQKVGVzdCBJbXBvcnQ7VEVTVC0wMDE7c2luaXk=",
+        "filename": "test.csv",
+        "photos": []
+      },
+      "expectedStatus": 200,
+      "expectedBody": {"added": 1},
+      "bodyMatcher": "partial"
+    }
+  ]
+}

@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import Icon from "@/components/ui/icon";
+import ImportModal from "@/components/ImportModal";
 
 const API_URL = "https://functions.poehali.dev/6bba6e36-932e-4957-ae83-49a5849b6081";
 
@@ -119,6 +120,7 @@ export default function AdminPage() {
   const [form, setForm] = useState<Product>(EMPTY);
   const [saving, setSaving] = useState(false);
   const [deleteId, setDeleteId] = useState<number | null>(null);
+  const [importOpen, setImportOpen] = useState(false);
   const [toast, setToast] = useState<{ msg: string; type: "ok" | "err" } | null>(null);
 
   const showToast = (msg: string, type: "ok" | "err" = "ok") => {
@@ -189,9 +191,17 @@ export default function AdminPage() {
             <h1 className="font-orbitron text-2xl sm:text-3xl font-black gradient-text">УПРАВЛЕНИЕ ТОВАРАМИ</h1>
             <p className="font-exo text-gray-500 text-sm mt-1">Всего товаров: <span className="neon-text-cyan font-bold">{total}</span></p>
           </div>
-          <button onClick={openCreate} className="flex items-center gap-2 px-5 py-3 rounded-xl font-orbitron text-sm font-bold btn-gradient">
-            <Icon name="Plus" size={16} /> ДОБАВИТЬ ТОВАР
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setImportOpen(true)}
+              className="flex items-center gap-2 px-5 py-3 rounded-xl font-orbitron text-sm font-bold btn-neon-cyan"
+            >
+              <Icon name="FileUp" size={16} /> ИМПОРТ
+            </button>
+            <button onClick={openCreate} className="flex items-center gap-2 px-5 py-3 rounded-xl font-orbitron text-sm font-bold btn-gradient">
+              <Icon name="Plus" size={16} /> ДОБАВИТЬ ТОВАР
+            </button>
+          </div>
         </div>
 
         {/* Search */}
@@ -375,6 +385,14 @@ export default function AdminPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Import modal */}
+      {importOpen && (
+        <ImportModal
+          onClose={() => setImportOpen(false)}
+          onDone={() => { load(); showToast("Импорт завершён!"); }}
+        />
       )}
     </div>
   );

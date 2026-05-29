@@ -1,4 +1,4 @@
-"""API для управления товарами магазина электроники (CRUD)."""
+"""API для управления товарами магазина электроники (CRUD + photo_url)."""
 import json
 import os
 import psycopg2
@@ -12,13 +12,27 @@ CORS = {
     "Access-Control-Allow-Headers": "Content-Type",
 }
 
+ALL_FIELDS = [
+    "kod_kitay", "naimenovanie", "artikul", "shtrikhkod",
+    "zakup_tsena_yuan", "kurs_yuan", "tsena_dostavki", "ves_tovara",
+    "gabarity_upakovki", "kurs_dollara", "stavka_kg", "stavka_kub",
+    "sebestoimost", "fifo", "lifo", "prodazh_tsena_roznitsa",
+    "prodazh_tsena_opt", "kolichestvo", "ostatok", "summa",
+    "zakazano", "otgruzheno", "vozvrat_postavshchiku",
+    "vozvrat_ot_pokupatelya", "tsvet", "photo_url"
+]
+
 
 def get_conn():
     return psycopg2.connect(os.environ["DATABASE_URL"])
 
 
 def resp(status, body):
-    return {"statusCode": status, "headers": {**CORS, "Content-Type": "application/json"}, "body": json.dumps(body, ensure_ascii=False, default=str)}
+    return {
+        "statusCode": status,
+        "headers": {**CORS, "Content-Type": "application/json"},
+        "body": json.dumps(body, ensure_ascii=False, default=str)
+    }
 
 
 def handler(event: dict, context) -> dict:
@@ -35,7 +49,6 @@ def handler(event: dict, context) -> dict:
     cur = conn.cursor(cursor_factory=RealDictCursor)
 
     try:
-        # GET — список или один товар
         if method == "GET":
             product_id = params.get("id")
             search = params.get("search", "")
@@ -58,7 +71,6 @@ def handler(event: dict, context) -> dict:
 
             cur.execute(f"SELECT COUNT(*) as total FROM {SCHEMA}.products {where}", args)
             total = cur.fetchone()["total"]
-
             cur.execute(
                 f"SELECT * FROM {SCHEMA}.products {where} ORDER BY id DESC LIMIT %s OFFSET %s",
                 args + [limit, offset]
@@ -66,48 +78,26 @@ def handler(event: dict, context) -> dict:
             rows = [dict(r) for r in cur.fetchall()]
             return resp(200, {"items": rows, "total": total, "limit": limit, "offset": offset})
 
-        # POST — создать товар
         elif method == "POST":
-            fields = [
-                "kod_kitay", "naimenovanie", "artikul", "shtrikhkod",
-                "zakup_tsena_yuan", "kurs_yuan", "tsena_dostavki", "ves_tovara",
-                "gabarity_upakovki", "kurs_dollara", "stavka_kg", "stavka_kub",
-                "sebestoimost", "fifo", "lifo", "prodazh_tsena_roznitsa",
-                "prodazh_tsena_opt", "kolichestvo", "ostatok", "summa",
-                "zakazano", "otgruzheno", "vozvrat_postavshchiku",
-                "vozvrat_ot_pokupatelya", "tsvet"
-            ]
-            present = {k: body[k] for k in fields if k in body}
+            present = {k: body[k] for k in ALL_FIELDS if k in body}
             if "naimenovanie" not in present:
                 return resp(400, {"error": "Поле naimenovanie обязательно"})
 
             cols = ", ".join(present.keys())
             placeholders = ", ".join(["%s"] * len(present))
-            vals = list(present.values())
-
             cur.execute(
                 f"INSERT INTO {SCHEMA}.products ({cols}) VALUES ({placeholders}) RETURNING *",
-                vals
+                list(present.values())
             )
             conn.commit()
             return resp(201, dict(cur.fetchone()))
 
-        # PUT — обновить товар
         elif method == "PUT":
             product_id = params.get("id") or body.get("id")
             if not product_id:
                 return resp(400, {"error": "Не указан id товара"})
 
-            fields = [
-                "kod_kitay", "naimenovanie", "artikul", "shtrikhkod",
-                "zakup_tsena_yuan", "kurs_yuan", "tsena_dostavki", "ves_tovara",
-                "gabarity_upakovki", "kurs_dollara", "stavka_kg", "stavka_kub",
-                "sebestoimost", "fifo", "lifo", "prodazh_tsena_roznitsa",
-                "prodazh_tsena_opt", "kolichestvo", "ostatok", "summa",
-                "zakazano", "otgruzheno", "vozvrat_postavshchiku",
-                "vozvrat_ot_pokupatelya", "tsvet"
-            ]
-            updates = {k: body[k] for k in fields if k in body}
+            updates = {k: body[k] for k in ALL_FIELDS if k in body}
             if not updates:
                 return resp(400, {"error": "Нет полей для обновления"})
 
@@ -129,7 +119,6 @@ def handler(event: dict, context) -> dict:
                 return resp(404, {"error": "Товар не найден"})
             return resp(200, dict(row))
 
-        # DELETE — удалить товар
         elif method == "DELETE":
             product_id = params.get("id")
             if not product_id:
