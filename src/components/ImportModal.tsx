@@ -41,6 +41,7 @@ export default function ImportModal({ onClose, onDone }: ImportModalProps) {
   const [preview, setPreview] = useState<PreviewData | null>(null);
   const [mapping, setMapping] = useState<Record<string, string>>({});
   const [loadingPreview, setLoadingPreview] = useState(false);
+  const [loadingStatus, setLoadingStatus] = useState("");
 
   const [importing, setImporting] = useState(false);
   const [result, setResult] = useState<ImportResult | null>(null);
@@ -54,8 +55,8 @@ export default function ImportModal({ onClose, onDone }: ImportModalProps) {
       setError("Формат .xls не поддерживается. Пересохраните файл как .xlsx");
       return;
     }
-    if (f.size > 10 * 1024 * 1024) {
-      setError("Файл слишком большой (максимум 10 МБ)");
+    if (f.size > 50 * 1024 * 1024) {
+      setError("Файл слишком большой (максимум 50 МБ)");
       return;
     }
     setError("");
@@ -66,24 +67,27 @@ export default function ImportModal({ onClose, onDone }: ImportModalProps) {
     if (!dataFile) return;
     setLoadingPreview(true); setError("");
     try {
+      setLoadingStatus("Читаем файл...");
       const file_base64 = await fileToBase64(dataFile);
       if (!file_base64) { setError("Не удалось прочитать файл"); setLoadingPreview(false); return; }
+      setLoadingStatus(`Отправляем на сервер (${(dataFile.size / 1024 / 1024).toFixed(1)} МБ)...`);
       const res = await fetch(IMPORT_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "preview", file_base64, filename: dataFile.name }),
       });
+      setLoadingStatus("Обрабатываем...");
       const text = await res.text();
       let data: Record<string, unknown>;
       try { data = JSON.parse(text); }
       catch { setError(`Сервер вернул неожиданный ответ: ${text.slice(0, 200)}`); setLoadingPreview(false); return; }
-      setLoadingPreview(false);
+      setLoadingPreview(false); setLoadingStatus("");
       if (!res.ok) { setError((data.error as string) || `Ошибка ${res.status}`); return; }
       setPreview(data as unknown as PreviewData);
       setMapping((data.auto_mapping as Record<string, string>) || {});
       setStep(1);
     } catch (e) {
-      setLoadingPreview(false);
+      setLoadingPreview(false); setLoadingStatus("");
       setError(`Ошибка: ${e instanceof Error ? e.message : String(e)}`);
     }
   };
@@ -178,8 +182,8 @@ export default function ImportModal({ onClose, onDone }: ImportModalProps) {
                       setError("Формат .xls не поддерживается. Пожалуйста, пересохраните файл в Excel как .xlsx (Файл → Сохранить как → Excel Workbook .xlsx)");
                       return;
                     }
-                    if (f.size > 10 * 1024 * 1024) {
-                      setError("Файл слишком большой (максимум 10 МБ). Разбейте на части.");
+                    if (f.size > 50 * 1024 * 1024) {
+                      setError("Файл слишком большой (максимум 50 МБ). Разбейте на части.");
                       return;
                     }
                     setError("");
@@ -404,7 +408,7 @@ export default function ImportModal({ onClose, onDone }: ImportModalProps) {
             <button onClick={loadPreview} disabled={!dataFile || loadingPreview}
               className="flex items-center gap-2 px-6 py-2.5 rounded-xl font-orbitron text-sm font-bold btn-gradient disabled:opacity-40">
               {loadingPreview
-                ? <><Icon name="Loader" size={14} className="animate-spin" /> Читаем файл...</>
+                ? <><Icon name="Loader" size={14} className="animate-spin" /> {loadingStatus || "Загрузка..."}</>
                 : <>Далее <Icon name="ChevronRight" size={14} /></>}
             </button>
           )}
