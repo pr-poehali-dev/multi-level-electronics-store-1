@@ -63,6 +63,7 @@ def handler(event: dict, context) -> dict:
                 return resp(200, dict(row))
 
             category_id = params.get("category_id")
+            supplier_id = params.get("supplier_id")
 
             conditions = []
             args = []
@@ -75,6 +76,10 @@ def handler(event: dict, context) -> dict:
             if category_id:
                 conditions.append("category_id = %s")
                 args.append(int(category_id))
+
+            if supplier_id:
+                conditions.append("supplier_id = %s")
+                args.append(int(supplier_id))
 
             where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
 

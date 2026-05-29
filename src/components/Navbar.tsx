@@ -71,6 +71,15 @@ export default function Navbar({ currentPage, setCurrentPage, cartCount }: Navba
             Категории
           </button>
           <button
+            onClick={() => setCurrentPage("suppliers")}
+            className={`hidden sm:flex items-center gap-2 px-3 py-2 rounded text-sm font-exo font-medium transition-all duration-200 ${
+              currentPage === "suppliers" ? "text-yellow-400 bg-yellow-500/10" : "text-gray-400 hover:text-white hover:bg-white/5"
+            }`}
+          >
+            <Icon name="Building2" size={16} />
+            Поставщики
+          </button>
+          <button
             onClick={() => setCurrentPage("admin")}
             className={`hidden sm:flex items-center gap-2 px-3 py-2 rounded text-sm font-exo font-medium transition-all duration-200 ${
               currentPage === "admin" ? "text-purple-400 bg-purple-500/10" : "text-gray-400 hover:text-white hover:bg-white/5"
@@ -103,20 +112,16 @@ export default function Navbar({ currentPage, setCurrentPage, cartCount }: Navba
               {link.label}
             </button>
           ))}
-          <button
-            onClick={() => { setCurrentPage("categories"); setMenuOpen(false); }}
-            className={`block w-full text-left px-3 py-3 rounded mb-1 font-exo transition-all ${
-              currentPage === "categories" ? "text-cyan-400 bg-cyan-500/10" : "text-gray-400"
-            }`}
-          >
+          <button onClick={() => { setCurrentPage("categories"); setMenuOpen(false); }}
+            className={`block w-full text-left px-3 py-3 rounded mb-1 font-exo transition-all ${currentPage === "categories" ? "text-cyan-400 bg-cyan-500/10" : "text-gray-400"}`}>
             Категории
           </button>
-          <button
-            onClick={() => { setCurrentPage("admin"); setMenuOpen(false); }}
-            className={`block w-full text-left px-3 py-3 rounded mb-1 font-exo transition-all ${
-              currentPage === "admin" ? "text-purple-400 bg-purple-500/10" : "text-gray-400"
-            }`}
-          >
+          <button onClick={() => { setCurrentPage("suppliers"); setMenuOpen(false); }}
+            className={`block w-full text-left px-3 py-3 rounded mb-1 font-exo transition-all ${currentPage === "suppliers" ? "text-yellow-400 bg-yellow-500/10" : "text-gray-400"}`}>
+            Поставщики
+          </button>
+          <button onClick={() => { setCurrentPage("admin"); setMenuOpen(false); }}
+            className={`block w-full text-left px-3 py-3 rounded mb-1 font-exo transition-all ${currentPage === "admin" ? "text-purple-400 bg-purple-500/10" : "text-gray-400"}`}>
             Товары (админ)
           </button>
         </div>

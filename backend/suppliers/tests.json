@@ -1,0 +1,21 @@
+{
+  "tests": [
+    {
+      "name": "GET suppliers list",
+      "method": "GET",
+      "path": "/",
+      "expectedStatus": 200,
+      "expectedBody": {"suppliers": [], "total": 0},
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "POST create supplier",
+      "method": "POST",
+      "path": "/",
+      "body": {"name": "Тест Поставщик", "country": "Китай", "currency": "CNY"},
+      "expectedStatus": 201,
+      "expectedBody": {"name": "Тест Поставщик"},
+      "bodyMatcher": "partial"
+    }
+  ]
+}

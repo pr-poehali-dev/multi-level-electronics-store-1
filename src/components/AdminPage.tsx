@@ -4,8 +4,10 @@ import ImportModal from "@/components/ImportModal";
 
 const API_URL = "https://functions.poehali.dev/6bba6e36-932e-4957-ae83-49a5849b6081";
 const CAT_URL = "https://functions.poehali.dev/f1fa8190-72a9-41b5-9c0c-58a339d81932";
+const SUP_URL = "https://functions.poehali.dev/0df6b6e1-15d2-4f73-abb0-dfdd6c396b46";
 
 interface FlatCategory { id: number; name: string; parent_id: number | null; }
+interface FlatSupplier { id: number; name: string; currency: string; }
 
 interface Product {
   id?: number;
@@ -35,6 +37,7 @@ interface Product {
   vozvrat_ot_pokupatelya: number;
   tsvet: string;
   category_id: number | null;
+  supplier_id: number | null;
 }
 
 const EMPTY: Product = {
@@ -44,7 +47,7 @@ const EMPTY: Product = {
   sebestoimost: 0, fifo: 0, lifo: 0, prodazh_tsena_roznitsa: 0,
   prodazh_tsena_opt: 0, kolichestvo: 0, ostatok: 0, summa: 0,
   zakazano: 0, otgruzheno: 0, vozvrat_postavshchiku: 0,
-  vozvrat_ot_pokupatelya: 0, tsvet: "", category_id: null,
+  vozvrat_ot_pokupatelya: 0, tsvet: "", category_id: null, supplier_id: null,
 };
 
 const FIELD_GROUPS = [
@@ -120,7 +123,9 @@ export default function AdminPage() {
   const limit = 20;
 
   const [categories, setCategories] = useState<FlatCategory[]>([]);
+  const [suppliers, setSuppliers] = useState<FlatSupplier[]>([]);
   const [filterCategoryId, setFilterCategoryId] = useState<string>("");
+  const [filterSupplierId, setFilterSupplierId] = useState<string>("");
 
   const [modalOpen, setModalOpen] = useState(false);
   const [editProduct, setEditProduct] = useState<Product | null>(null);
@@ -142,18 +147,20 @@ export default function AdminPage() {
       offset: String(page * limit),
       ...(search ? { search } : {}),
       ...(filterCategoryId ? { category_id: filterCategoryId } : {}),
+      ...(filterSupplierId ? { supplier_id: filterSupplierId } : {}),
     });
     const res = await fetch(`${API_URL}?${q}`);
     const data = await res.json();
     setProducts(data.items || []);
     setTotal(data.total || 0);
     setLoading(false);
-  }, [search, page, filterCategoryId]);
+  }, [search, page, filterCategoryId, filterSupplierId]);
 
   useEffect(() => { load(); }, [load]);
 
   useEffect(() => {
     fetch(CAT_URL).then(r => r.json()).then(d => setCategories(d.flat || []));
+    fetch(SUP_URL).then(r => r.json()).then(d => setSuppliers(d.suppliers || []));
   }, []);
 
   const openCreate = () => { setEditProduct(null); setForm(EMPTY); setModalOpen(true); };
@@ -252,9 +259,28 @@ export default function AdminPage() {
               ))}
             </select>
           </div>
-          {filterCategoryId && (
+          <div className="relative">
+            <Icon name="Building2" size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none" />
+            <select
+              value={filterSupplierId}
+              onChange={e => { setFilterSupplierId(e.target.value); setPage(0); }}
+              className="pl-9 pr-4 py-2.5 rounded-xl font-exo text-sm text-white outline-none cursor-pointer"
+              style={{
+                background: "#0d1117",
+                border: `1px solid ${filterSupplierId ? "rgba(251,191,36,0.5)" : "#1e2535"}`,
+                color: filterSupplierId ? "#fbbf24" : "#9ca3af",
+                minWidth: 180,
+              }}
+            >
+              <option value="">Все поставщики</option>
+              {suppliers.filter(s => s).map(s => (
+                <option key={s.id} value={s.id}>{s.name}</option>
+              ))}
+            </select>
+          </div>
+          {(filterCategoryId || filterSupplierId) && (
             <button
-              onClick={() => { setFilterCategoryId(""); setPage(0); }}
+              onClick={() => { setFilterCategoryId(""); setFilterSupplierId(""); setPage(0); }}
               className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl font-exo text-xs text-gray-400 hover:text-white transition-all flex-shrink-0"
               style={{ border: "1px solid #1e2535" }}
             >
@@ -385,25 +411,43 @@ export default function AdminPage() {
                     <div className="w-1 h-4 rounded-full" style={{ background: group.color }} />
                     <h3 className="font-orbitron text-xs font-bold tracking-wider" style={{ color: group.color }}>{group.label.toUpperCase()}</h3>
                   </div>
-                  {/* Селект категории — только в группе Идентификация */}
+                  {/* Категория и Поставщик — только в группе Идентификация */}
                   {group.label === "Идентификация" && (
-                    <div className="mb-3">
-                      <label className="font-exo text-xs text-gray-500 mb-1 block">Категория</label>
-                      <select
-                        value={form.category_id ?? ""}
-                        onChange={e => setField("category_id", e.target.value === "" ? null as unknown as number : Number(e.target.value))}
-                        className="w-full px-3 py-2.5 rounded-xl font-exo text-sm text-white outline-none cursor-pointer transition-all"
-                        style={{ background: "#060810", border: "1px solid #1e2535" }}
-                        onFocus={e => e.target.style.borderColor = group.color}
-                        onBlur={e => e.target.style.borderColor = "#1e2535"}
-                      >
-                        <option value="">— Без категории —</option>
-                        {categories.map(c => (
-                          <option key={c.id} value={c.id}>
-                            {c.parent_id ? `  └ ${c.name}` : c.name}
-                          </option>
-                        ))}
-                      </select>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+                      <div>
+                        <label className="font-exo text-xs text-gray-500 mb-1 block">Категория</label>
+                        <select
+                          value={form.category_id ?? ""}
+                          onChange={e => setField("category_id", e.target.value === "" ? null as unknown as number : Number(e.target.value))}
+                          className="w-full px-3 py-2.5 rounded-xl font-exo text-sm text-white outline-none cursor-pointer transition-all"
+                          style={{ background: "#060810", border: "1px solid #1e2535" }}
+                          onFocus={e => e.target.style.borderColor = group.color}
+                          onBlur={e => e.target.style.borderColor = "#1e2535"}
+                        >
+                          <option value="">— Без категории —</option>
+                          {categories.map(c => (
+                            <option key={c.id} value={c.id}>
+                              {c.parent_id ? `  └ ${c.name}` : c.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="font-exo text-xs text-gray-500 mb-1 block">Поставщик</label>
+                        <select
+                          value={form.supplier_id ?? ""}
+                          onChange={e => setField("supplier_id", e.target.value === "" ? null as unknown as number : Number(e.target.value))}
+                          className="w-full px-3 py-2.5 rounded-xl font-exo text-sm text-white outline-none cursor-pointer transition-all"
+                          style={{ background: "#060810", border: "1px solid #1e2535" }}
+                          onFocus={e => e.target.style.borderColor = group.color}
+                          onBlur={e => e.target.style.borderColor = "#1e2535"}
+                        >
+                          <option value="">— Без поставщика —</option>
+                          {suppliers.filter(s => s).map(s => (
+                            <option key={s.id} value={s.id}>{s.name}</option>
+                          ))}
+                        </select>
+                      </div>
                     </div>
                   )}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
