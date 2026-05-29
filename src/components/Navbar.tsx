@@ -61,6 +61,15 @@ export default function Navbar({ currentPage, setCurrentPage, cartCount }: Navba
               </span>
             )}
           </button>
+          <button
+            onClick={() => setCurrentPage("admin")}
+            className={`hidden sm:flex items-center gap-2 px-3 py-2 rounded text-sm font-exo font-medium transition-all duration-200 ${
+              currentPage === "admin" ? "text-purple-400 bg-purple-500/10" : "text-gray-400 hover:text-white hover:bg-white/5"
+            }`}
+          >
+            <Icon name="LayoutDashboard" size={16} />
+            Админ
+          </button>
           <button className="hidden sm:flex items-center gap-2 px-4 py-2 rounded text-sm font-exo font-semibold btn-neon-cyan">
             <Icon name="User" size={16} />
             Войти
@@ -85,6 +94,14 @@ export default function Navbar({ currentPage, setCurrentPage, cartCount }: Navba
               {link.label}
             </button>
           ))}
+          <button
+            onClick={() => { setCurrentPage("admin"); setMenuOpen(false); }}
+            className={`block w-full text-left px-3 py-3 rounded mb-1 font-exo transition-all ${
+              currentPage === "admin" ? "text-purple-400 bg-purple-500/10" : "text-gray-400"
+            }`}
+          >
+            Админ-панель
+          </button>
         </div>
       )}
     </nav>

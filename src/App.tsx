@@ -10,6 +10,7 @@ import DeliveryPage from "@/components/DeliveryPage";
 import ReviewsPage from "@/components/ReviewsPage";
 import AboutPage from "@/components/AboutPage";
 import ContactsPage from "@/components/ContactsPage";
+import AdminPage from "@/components/AdminPage";
 
 interface CartItem {
   id: number;
@@ -50,6 +51,7 @@ export default function App() {
       case "reviews": return <ReviewsPage />;
       case "about": return <AboutPage />;
       case "contacts": return <ContactsPage />;
+      case "admin": return <AdminPage />;
       default: return <HomePage setCurrentPage={setCurrentPage} />;
     }
   };
@@ -60,7 +62,7 @@ export default function App() {
       <div className="min-h-screen" style={{ background: "var(--dark-bg)" }}>
         <Navbar currentPage={currentPage} setCurrentPage={setCurrentPage} cartCount={cartCount} />
         <main>{renderPage()}</main>
-        {currentPage !== "cart" && <Footer setCurrentPage={setCurrentPage} />}
+        {currentPage !== "cart" && currentPage !== "admin" && <Footer setCurrentPage={setCurrentPage} />}
       </div>
     </TooltipProvider>
   );
