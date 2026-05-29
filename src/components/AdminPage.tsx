@@ -3,6 +3,9 @@ import Icon from "@/components/ui/icon";
 import ImportModal from "@/components/ImportModal";
 
 const API_URL = "https://functions.poehali.dev/6bba6e36-932e-4957-ae83-49a5849b6081";
+const CAT_URL = "https://functions.poehali.dev/f1fa8190-72a9-41b5-9c0c-58a339d81932";
+
+interface FlatCategory { id: number; name: string; parent_id: number | null; }
 
 interface Product {
   id?: number;
@@ -31,6 +34,7 @@ interface Product {
   vozvrat_postavshchiku: number;
   vozvrat_ot_pokupatelya: number;
   tsvet: string;
+  category_id: number | null;
 }
 
 const EMPTY: Product = {
@@ -40,7 +44,7 @@ const EMPTY: Product = {
   sebestoimost: 0, fifo: 0, lifo: 0, prodazh_tsena_roznitsa: 0,
   prodazh_tsena_opt: 0, kolichestvo: 0, ostatok: 0, summa: 0,
   zakazano: 0, otgruzheno: 0, vozvrat_postavshchiku: 0,
-  vozvrat_ot_pokupatelya: 0, tsvet: "",
+  vozvrat_ot_pokupatelya: 0, tsvet: "", category_id: null,
 };
 
 const FIELD_GROUPS = [
@@ -97,14 +101,14 @@ const FIELD_GROUPS = [
 
 const TABLE_COLS = [
   { key: "id", label: "ID", w: "60px" },
-  { key: "naimenovanie", label: "Наименование", w: "220px" },
-  { key: "artikul", label: "Артикул", w: "110px" },
-  { key: "tsvet", label: "Цвет", w: "90px" },
-  { key: "prodazh_tsena_roznitsa", label: "Розница ₽", w: "110px" },
-  { key: "prodazh_tsena_opt", label: "Опт ₽", w: "100px" },
-  { key: "kolichestvo", label: "Кол-во", w: "80px" },
-  { key: "ostatok", label: "Остаток", w: "80px" },
-  { key: "sebestoimost", label: "Себест. ₽", w: "100px" },
+  { key: "naimenovanie", label: "Наименование", w: "200px" },
+  { key: "artikul", label: "Артикул", w: "100px" },
+  { key: "category_id", label: "Категория", w: "130px" },
+  { key: "tsvet", label: "Цвет", w: "80px" },
+  { key: "prodazh_tsena_roznitsa", label: "Розница ₽", w: "100px" },
+  { key: "prodazh_tsena_opt", label: "Опт ₽", w: "90px" },
+  { key: "kolichestvo", label: "Кол-во", w: "70px" },
+  { key: "ostatok", label: "Остаток", w: "70px" },
 ];
 
 export default function AdminPage() {
@@ -114,6 +118,8 @@ export default function AdminPage() {
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(0);
   const limit = 20;
+
+  const [categories, setCategories] = useState<FlatCategory[]>([]);
 
   const [modalOpen, setModalOpen] = useState(false);
   const [editProduct, setEditProduct] = useState<Product | null>(null);
@@ -139,6 +145,10 @@ export default function AdminPage() {
   }, [search, page]);
 
   useEffect(() => { load(); }, [load]);
+
+  useEffect(() => {
+    fetch(CAT_URL).then(r => r.json()).then(d => setCategories(d.flat || []));
+  }, []);
 
   const openCreate = () => { setEditProduct(null); setForm(EMPTY); setModalOpen(true); };
   const openEdit = (p: Product) => { setEditProduct(p); setForm({ ...p }); setModalOpen(true); };
@@ -262,6 +272,13 @@ export default function AdminPage() {
                                 <span className="w-3 h-3 rounded-full border border-gray-700 inline-block" style={{ background: p.tsvet }} />
                                 <span className="text-xs text-gray-400">{p.tsvet}</span>
                               </span>
+                            : c.key === "category_id"
+                            ? (() => {
+                                const cat = categories.find(c2 => c2.id === p.category_id);
+                                return cat
+                                  ? <span className="px-2 py-0.5 rounded-full font-exo text-xs" style={{ background: "rgba(168,85,247,0.1)", border: "1px solid rgba(168,85,247,0.3)", color: "#a855f7" }}>{cat.name}</span>
+                                  : <span className="text-gray-700 text-xs">—</span>;
+                              })()
                             : <span className="truncate max-w-[200px] block">{String(p[c.key as keyof Product] ?? "—")}</span>
                           }
                         </td>
@@ -330,6 +347,27 @@ export default function AdminPage() {
                     <div className="w-1 h-4 rounded-full" style={{ background: group.color }} />
                     <h3 className="font-orbitron text-xs font-bold tracking-wider" style={{ color: group.color }}>{group.label.toUpperCase()}</h3>
                   </div>
+                  {/* Селект категории — только в группе Идентификация */}
+                  {group.label === "Идентификация" && (
+                    <div className="mb-3">
+                      <label className="font-exo text-xs text-gray-500 mb-1 block">Категория</label>
+                      <select
+                        value={form.category_id ?? ""}
+                        onChange={e => setField("category_id", e.target.value === "" ? null as unknown as number : Number(e.target.value))}
+                        className="w-full px-3 py-2.5 rounded-xl font-exo text-sm text-white outline-none cursor-pointer transition-all"
+                        style={{ background: "#060810", border: "1px solid #1e2535" }}
+                        onFocus={e => e.target.style.borderColor = group.color}
+                        onBlur={e => e.target.style.borderColor = "#1e2535"}
+                      >
+                        <option value="">— Без категории —</option>
+                        {categories.map(c => (
+                          <option key={c.id} value={c.id}>
+                            {c.parent_id ? `  └ ${c.name}` : c.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     {group.fields.map(f => (
                       <div key={f.key}>
