@@ -97,8 +97,11 @@ def resp(status, body):
 
 def parse_file(file_bytes: bytes, filename: str):
     """Возвращает (headers_raw: list[str], rows: list[list[str]])"""
-    if filename.endswith(".xlsx"):
-        return parse_excel(file_bytes)
+    fn = filename.lower()
+    if fn.endswith(".xlsx"):
+        return parse_xlsx(file_bytes)
+    if fn.endswith(".xls"):
+        return parse_xls(file_bytes)
     # CSV/TXT
     content = ""
     for enc in ("utf-8-sig", "utf-8", "cp1251", "latin-1"):
@@ -134,76 +137,48 @@ def parse_csv(content: str):
     return headers, rows
 
 
-def col_letter_to_index(col_str: str) -> int:
-    """Переводит буквенный номер столбца Excel (A, B, AA...) в 0-based индекс."""
-    result = 0
-    for ch in col_str.upper():
-        result = result * 26 + (ord(ch) - ord('A') + 1)
-    return result - 1
-
-
-def parse_excel(data: bytes):
-    import zipfile
-    import xml.etree.ElementTree as ET
-    import re
-
-    zf = zipfile.ZipFile(io.BytesIO(data))
-    shared = []
-    if "xl/sharedStrings.xml" in zf.namelist():
-        root = ET.fromstring(zf.read("xl/sharedStrings.xml"))
-        ns = {"x": "http://schemas.openxmlformats.org/spreadsheetml/2006/main"}
-        for si in root.findall("x:si", ns):
-            shared.append("".join(t.text or "" for t in si.findall(".//x:t", ns)))
-
-    # Найти первый лист — берём из workbook.xml
-    ns = {"x": "http://schemas.openxmlformats.org/spreadsheetml/2006/main"}
-    sheet_files = [n for n in zf.namelist() if n.startswith("xl/worksheets/sheet") and n.endswith(".xml")]
-    if not sheet_files:
-        return [], []
-    sheet_root = ET.fromstring(zf.read(sorted(sheet_files)[0]))
-
-    def cell_val(c):
-        v = c.find("x:v", ns)
-        if v is None:
-            return ""
-        val = v.text or ""
-        t = c.get("t", "")
-        if t == "s":
-            idx = int(val)
-            return shared[idx] if idx < len(shared) else ""
-        if t == "b":
-            return "Да" if val == "1" else "Нет"
-        return val
-
+def parse_xlsx(data: bytes):
+    """Парсит .xlsx через openpyxl — надёжно, с учётом пустых ячеек."""
+    import openpyxl
+    wb = openpyxl.load_workbook(io.BytesIO(data), read_only=True, data_only=True)
+    ws = wb.active
     all_rows = []
-    for row_el in sheet_root.findall(".//x:row", ns):
-        cells = row_el.findall("x:c", ns)
-        if not cells:
-            continue
-        # Определяем максимальный индекс столбца в строке
-        max_col = 0
-        cell_map = {}
-        for c in cells:
-            ref = c.get("r", "")          # например "C5"
-            col_str = re.sub(r"\d", "", ref)   # "C"
-            if col_str:
-                col_idx = col_letter_to_index(col_str)
-                cell_map[col_idx] = cell_val(c)
-                max_col = max(max_col, col_idx)
-
-        # Собираем строку с учётом пропусков
-        row_vals = [cell_map.get(i, "") for i in range(max_col + 1)]
-        all_rows.append(row_vals)
-
+    for row in ws.iter_rows(values_only=True):
+        vals = [str(v).strip() if v is not None else "" for v in row]
+        all_rows.append(vals)
+    wb.close()
     if not all_rows:
         return [], []
-
-    # Нормализуем все строки до одной ширины
-    max_width = max(len(r) for r in all_rows)
-    all_rows = [r + [""] * (max_width - len(r)) for r in all_rows]
-
+    # Нормализуем ширину
+    max_w = max(len(r) for r in all_rows)
+    all_rows = [r + [""] * (max_w - len(r)) for r in all_rows]
     headers = all_rows[0]
-    data_rows = [r for r in all_rows[1:] if any(v.strip() for v in r)]
+    data_rows = [r for r in all_rows[1:] if any(v for v in r)]
+    return headers, data_rows
+
+
+def parse_xls(data: bytes):
+    """Парсит старый формат .xls через xlrd."""
+    import xlrd
+    wb = xlrd.open_workbook(file_contents=data)
+    ws = wb.sheet_by_index(0)
+    if ws.nrows == 0:
+        return [], []
+    all_rows = []
+    for i in range(ws.nrows):
+        row = []
+        for j in range(ws.ncols):
+            cell = ws.cell(i, j)
+            # xlrd типы: 0=empty,1=text,2=number,3=date,4=bool,5=error
+            if cell.ctype == 2 and cell.value == int(cell.value):
+                row.append(str(int(cell.value)))
+            elif cell.ctype in (0, 5):
+                row.append("")
+            else:
+                row.append(str(cell.value).strip())
+        all_rows.append(row)
+    headers = all_rows[0]
+    data_rows = [r for r in all_rows[1:] if any(v for v in r)]
     return headers, data_rows
 
 

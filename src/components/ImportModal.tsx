@@ -49,24 +49,43 @@ export default function ImportModal({ onClose, onDone }: ImportModalProps) {
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault(); setDrag(false);
     const f = e.dataTransfer.files[0];
-    if (f) setDataFile(f);
+    if (!f) return;
+    if (f.name.toLowerCase().endsWith(".xls")) {
+      setError("Формат .xls не поддерживается. Пересохраните файл как .xlsx");
+      return;
+    }
+    if (f.size > 10 * 1024 * 1024) {
+      setError("Файл слишком большой (максимум 10 МБ)");
+      return;
+    }
+    setError("");
+    setDataFile(f);
   }, []);
 
   const loadPreview = async () => {
     if (!dataFile) return;
     setLoadingPreview(true); setError("");
-    const file_base64 = await fileToBase64(dataFile);
-    const res = await fetch(IMPORT_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "preview", file_base64, filename: dataFile.name }),
-    });
-    const data = await res.json();
-    setLoadingPreview(false);
-    if (!res.ok) { setError(data.error || "Ошибка чтения файла"); return; }
-    setPreview(data);
-    setMapping(data.auto_mapping || {});
-    setStep(1);
+    try {
+      const file_base64 = await fileToBase64(dataFile);
+      if (!file_base64) { setError("Не удалось прочитать файл"); setLoadingPreview(false); return; }
+      const res = await fetch(IMPORT_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "preview", file_base64, filename: dataFile.name }),
+      });
+      const text = await res.text();
+      let data: Record<string, unknown>;
+      try { data = JSON.parse(text); }
+      catch { setError(`Сервер вернул неожиданный ответ: ${text.slice(0, 200)}`); setLoadingPreview(false); return; }
+      setLoadingPreview(false);
+      if (!res.ok) { setError((data.error as string) || `Ошибка ${res.status}`); return; }
+      setPreview(data as unknown as PreviewData);
+      setMapping((data.auto_mapping as Record<string, string>) || {});
+      setStep(1);
+    } catch (e) {
+      setLoadingPreview(false);
+      setError(`Ошибка: ${e instanceof Error ? e.message : String(e)}`);
+    }
   };
 
   const runImport = async () => {
@@ -151,8 +170,21 @@ export default function ImportModal({ onClose, onDone }: ImportModalProps) {
                 onClick={() => fileRef.current?.click()}
                 className="rounded-xl p-10 text-center cursor-pointer transition-all"
                 style={{ border: `2px dashed ${drag ? "#00ffff" : dataFile ? "#a855f7" : "#1e2535"}`, background: drag ? "rgba(0,255,255,0.03)" : dataFile ? "rgba(168,85,247,0.03)" : "transparent" }}>
-                <input ref={fileRef} type="file" accept=".csv,.xlsx,.xls,.txt" className="hidden"
-                  onChange={e => e.target.files?.[0] && setDataFile(e.target.files[0])} />
+                <input ref={fileRef} type="file" accept=".csv,.xlsx,.txt" className="hidden"
+                  onChange={e => {
+                    const f = e.target.files?.[0];
+                    if (!f) return;
+                    if (f.name.toLowerCase().endsWith(".xls")) {
+                      setError("Формат .xls не поддерживается. Пожалуйста, пересохраните файл в Excel как .xlsx (Файл → Сохранить как → Excel Workbook .xlsx)");
+                      return;
+                    }
+                    if (f.size > 10 * 1024 * 1024) {
+                      setError("Файл слишком большой (максимум 10 МБ). Разбейте на части.");
+                      return;
+                    }
+                    setError("");
+                    setDataFile(f);
+                  }} />
                 {dataFile ? (
                   <div className="flex items-center justify-center gap-3">
                     <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
