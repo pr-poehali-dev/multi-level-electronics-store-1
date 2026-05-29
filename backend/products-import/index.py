@@ -134,9 +134,18 @@ def parse_csv(content: str):
     return headers, rows
 
 
+def col_letter_to_index(col_str: str) -> int:
+    """Переводит буквенный номер столбца Excel (A, B, AA...) в 0-based индекс."""
+    result = 0
+    for ch in col_str.upper():
+        result = result * 26 + (ord(ch) - ord('A') + 1)
+    return result - 1
+
+
 def parse_excel(data: bytes):
     import zipfile
     import xml.etree.ElementTree as ET
+    import re
 
     zf = zipfile.ZipFile(io.BytesIO(data))
     shared = []
@@ -146,24 +155,56 @@ def parse_excel(data: bytes):
         for si in root.findall("x:si", ns):
             shared.append("".join(t.text or "" for t in si.findall(".//x:t", ns)))
 
-    sheet_root = ET.fromstring(zf.read("xl/worksheets/sheet1.xml"))
+    # Найти первый лист — берём из workbook.xml
     ns = {"x": "http://schemas.openxmlformats.org/spreadsheetml/2006/main"}
+    sheet_files = [n for n in zf.namelist() if n.startswith("xl/worksheets/sheet") and n.endswith(".xml")]
+    if not sheet_files:
+        return [], []
+    sheet_root = ET.fromstring(zf.read(sorted(sheet_files)[0]))
 
     def cell_val(c):
         v = c.find("x:v", ns)
         if v is None:
             return ""
         val = v.text or ""
-        if c.get("t") == "s":
+        t = c.get("t", "")
+        if t == "s":
             idx = int(val)
             return shared[idx] if idx < len(shared) else ""
+        if t == "b":
+            return "Да" if val == "1" else "Нет"
         return val
 
-    all_rows = [[cell_val(c) for c in row.findall("x:c", ns)]
-                for row in sheet_root.findall(".//x:row", ns)]
+    all_rows = []
+    for row_el in sheet_root.findall(".//x:row", ns):
+        cells = row_el.findall("x:c", ns)
+        if not cells:
+            continue
+        # Определяем максимальный индекс столбца в строке
+        max_col = 0
+        cell_map = {}
+        for c in cells:
+            ref = c.get("r", "")          # например "C5"
+            col_str = re.sub(r"\d", "", ref)   # "C"
+            if col_str:
+                col_idx = col_letter_to_index(col_str)
+                cell_map[col_idx] = cell_val(c)
+                max_col = max(max_col, col_idx)
+
+        # Собираем строку с учётом пропусков
+        row_vals = [cell_map.get(i, "") for i in range(max_col + 1)]
+        all_rows.append(row_vals)
+
     if not all_rows:
         return [], []
-    return all_rows[0], [r for r in all_rows[1:] if any(r)]
+
+    # Нормализуем все строки до одной ширины
+    max_width = max(len(r) for r in all_rows)
+    all_rows = [r + [""] * (max_width - len(r)) for r in all_rows]
+
+    headers = all_rows[0]
+    data_rows = [r for r in all_rows[1:] if any(v.strip() for v in r)]
+    return headers, data_rows
 
 
 def handler(event: dict, context) -> dict:
