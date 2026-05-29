@@ -20,13 +20,12 @@ interface ImportResult {
 }
 interface ImportModalProps { onClose: () => void; onDone: () => void; }
 
-function fileToBase64(file: File): Promise<string> {
-  return new Promise((res, rej) => {
-    const r = new FileReader();
-    r.onload = () => res((r.result as string).split(",")[1]);
-    r.onerror = rej;
-    r.readAsDataURL(file);
-  });
+function buildForm(file: File, action: string, extra?: Record<string, string>): FormData {
+  const fd = new FormData();
+  fd.append("file", file, file.name);
+  fd.append("action", action);
+  if (extra) Object.entries(extra).forEach(([k, v]) => fd.append(k, v));
+  return fd;
 }
 
 const STEPS = ["Файл", "Маппинг колонок", "Результат"];
@@ -67,20 +66,16 @@ export default function ImportModal({ onClose, onDone }: ImportModalProps) {
     if (!dataFile) return;
     setLoadingPreview(true); setError("");
     try {
-      setLoadingStatus("Читаем файл...");
-      const file_base64 = await fileToBase64(dataFile);
-      if (!file_base64) { setError("Не удалось прочитать файл"); setLoadingPreview(false); return; }
-      setLoadingStatus(`Отправляем на сервер (${(dataFile.size / 1024 / 1024).toFixed(1)} МБ)...`);
+      setLoadingStatus(`Отправляем (${(dataFile.size / 1024 / 1024).toFixed(1)} МБ)...`);
       const res = await fetch(IMPORT_URL, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "preview", file_base64, filename: dataFile.name }),
+        body: buildForm(dataFile, "preview"),
       });
       setLoadingStatus("Обрабатываем...");
       const text = await res.text();
       let data: Record<string, unknown>;
       try { data = JSON.parse(text); }
-      catch { setError(`Сервер вернул неожиданный ответ: ${text.slice(0, 200)}`); setLoadingPreview(false); return; }
+      catch { setError(`Неожиданный ответ сервера: ${text.slice(0, 300)}`); setLoadingPreview(false); return; }
       setLoadingPreview(false); setLoadingStatus("");
       if (!res.ok) { setError((data.error as string) || `Ошибка ${res.status}`); return; }
       setPreview(data as unknown as PreviewData);
@@ -88,23 +83,27 @@ export default function ImportModal({ onClose, onDone }: ImportModalProps) {
       setStep(1);
     } catch (e) {
       setLoadingPreview(false); setLoadingStatus("");
-      setError(`Ошибка: ${e instanceof Error ? e.message : String(e)}`);
+      setError(`Ошибка сети: ${e instanceof Error ? e.message : String(e)}`);
     }
   };
 
   const runImport = async () => {
     if (!dataFile || !preview) return;
     setImporting(true); setError(""); setStep(2);
-    const file_base64 = await fileToBase64(dataFile);
-    const res = await fetch(IMPORT_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "import", file_base64, filename: dataFile.name, mapping }),
-    });
-    const data = await res.json();
-    setImporting(false);
-    if (!res.ok) { setError(data.error || "Ошибка импорта"); setStep(1); return; }
-    setResult(data);
+    try {
+      const res = await fetch(IMPORT_URL, {
+        method: "POST",
+        body: buildForm(dataFile, "import", { mapping: JSON.stringify(mapping) }),
+      });
+      const data = await res.json();
+      setImporting(false);
+      if (!res.ok) { setError(data.error || "Ошибка импорта"); setStep(1); return; }
+      setResult(data);
+    } catch (e) {
+      setImporting(false);
+      setError(`Ошибка сети: ${e instanceof Error ? e.message : String(e)}`);
+      setStep(1);
+    }
   };
 
   const setColMapping = (fileCol: string, dbField: string) => {

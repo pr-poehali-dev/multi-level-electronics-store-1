@@ -182,21 +182,70 @@ def parse_xls(data: bytes):
     return headers, data_rows
 
 
+def parse_multipart(body_bytes: bytes, content_type: str):
+    """Извлекает поля из multipart/form-data. Возвращает dict {name: value/bytes}."""
+    import re
+    boundary_match = re.search(r'boundary=([^\s;]+)', content_type)
+    if not boundary_match:
+        return {}
+    boundary = boundary_match.group(1).encode()
+    parts = body_bytes.split(b'--' + boundary)
+    result = {}
+    for part in parts:
+        if b'Content-Disposition' not in part:
+            continue
+        header_end = part.find(b'\r\n\r\n')
+        if header_end == -1:
+            continue
+        headers_raw = part[:header_end].decode('utf-8', errors='replace')
+        data = part[header_end + 4:].rstrip(b'\r\n')
+        name_match = re.search(r'name="([^"]+)"', headers_raw)
+        if not name_match:
+            continue
+        name = name_match.group(1)
+        filename_match = re.search(r'filename="([^"]+)"', headers_raw)
+        if filename_match:
+            result[name] = data
+            result[name + '__filename'] = filename_match.group(1)
+        else:
+            result[name] = data.decode('utf-8', errors='replace')
+    return result
+
+
 def handler(event: dict, context) -> dict:
     if event.get("httpMethod") == "OPTIONS":
         return {"statusCode": 200, "headers": CORS, "body": ""}
     if event.get("httpMethod") != "POST":
         return resp(405, {"error": "Только POST"})
 
-    body = json.loads(event.get("body") or "{}")
-    action = body.get("action", "preview")
-    file_b64 = body.get("file_base64", "")
-    filename = body.get("filename", "file.csv").lower()
+    content_type = event.get("headers", {}).get("content-type", "") or \
+                   event.get("headers", {}).get("Content-Type", "")
 
-    if not file_b64:
-        return resp(400, {"error": "Нет файла"})
-
-    file_bytes = base64.b64decode(file_b64)
+    # Определяем тип запроса: multipart или JSON
+    if "multipart/form-data" in content_type:
+        raw_body = event.get("body") or ""
+        if event.get("isBase64Encoded"):
+            body_bytes = base64.b64decode(raw_body)
+        else:
+            body_bytes = raw_body.encode("latin-1")
+        fields = parse_multipart(body_bytes, content_type)
+        action = fields.get("action", "preview")
+        filename = (fields.get("file__filename") or fields.get("filename") or "file.xlsx").lower()
+        file_bytes = fields.get("file")
+        mapping_str = fields.get("mapping", "{}")
+        mapping = json.loads(mapping_str) if isinstance(mapping_str, str) else {}
+        if not file_bytes:
+            return resp(400, {"error": "Нет файла в запросе"})
+    else:
+        # Старый JSON-режим (для маленьких файлов / обратная совместимость)
+        body = json.loads(event.get("body") or "{}")
+        action = body.get("action", "preview")
+        file_b64 = body.get("file_base64", "")
+        filename = body.get("filename", "file.csv").lower()
+        mapping = body.get("mapping", {})
+        if not file_b64:
+            return resp(400, {"error": "Нет файла"})
+        file_bytes = base64.b64decode(file_b64)
     headers_raw, data_rows = parse_file(file_bytes, filename)
 
     if not headers_raw:
@@ -227,8 +276,6 @@ def handler(event: dict, context) -> dict:
 
     # ── IMPORT ───────────────────────────────────────────────────────────────
     if action == "import":
-        # mapping: { "Колонка файла": "db_field" | "" }
-        mapping = body.get("mapping", {})
         # Только активные маппинги (не пустые)
         active = {col: db for col, db in mapping.items() if db}
 
