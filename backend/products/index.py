@@ -62,12 +62,21 @@ def handler(event: dict, context) -> dict:
                     return resp(404, {"error": "Товар не найден"})
                 return resp(200, dict(row))
 
-            where = ""
+            category_id = params.get("category_id")
+
+            conditions = []
             args = []
+
             if search:
-                where = "WHERE naimenovanie ILIKE %s OR artikul ILIKE %s OR kod_kitay ILIKE %s"
+                conditions.append("(naimenovanie ILIKE %s OR artikul ILIKE %s OR kod_kitay ILIKE %s)")
                 like = f"%{search}%"
-                args = [like, like, like]
+                args += [like, like, like]
+
+            if category_id:
+                conditions.append("category_id = %s")
+                args.append(int(category_id))
+
+            where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
 
             cur.execute(f"SELECT COUNT(*) as total FROM {SCHEMA}.products {where}", args)
             total = cur.fetchone()["total"]

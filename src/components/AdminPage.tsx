@@ -120,6 +120,7 @@ export default function AdminPage() {
   const limit = 20;
 
   const [categories, setCategories] = useState<FlatCategory[]>([]);
+  const [filterCategoryId, setFilterCategoryId] = useState<string>("");
 
   const [modalOpen, setModalOpen] = useState(false);
   const [editProduct, setEditProduct] = useState<Product | null>(null);
@@ -136,13 +137,18 @@ export default function AdminPage() {
 
   const load = useCallback(async () => {
     setLoading(true);
-    const q = new URLSearchParams({ limit: String(limit), offset: String(page * limit), ...(search ? { search } : {}) });
+    const q = new URLSearchParams({
+      limit: String(limit),
+      offset: String(page * limit),
+      ...(search ? { search } : {}),
+      ...(filterCategoryId ? { category_id: filterCategoryId } : {}),
+    });
     const res = await fetch(`${API_URL}?${q}`);
     const data = await res.json();
     setProducts(data.items || []);
     setTotal(data.total || 0);
     setLoading(false);
-  }, [search, page]);
+  }, [search, page, filterCategoryId]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -214,15 +220,47 @@ export default function AdminPage() {
           </div>
         </div>
 
-        {/* Search */}
-        <div className="relative mb-4 max-w-md">
-          <Icon name="Search" size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
-          <input
-            type="text" placeholder="Поиск по названию, артикулу, коду..." value={search}
-            onChange={e => { setSearch(e.target.value); setPage(0); }}
-            className="w-full pl-10 pr-4 py-2.5 rounded-xl font-exo text-sm text-white outline-none"
-            style={{ background: "#0d1117", border: "1px solid #1e2535" }}
-          />
+        {/* Search + Category filter */}
+        <div className="flex flex-col sm:flex-row gap-3 mb-4">
+          <div className="relative flex-1 max-w-md">
+            <Icon name="Search" size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
+            <input
+              type="text" placeholder="Поиск по названию, артикулу, коду..." value={search}
+              onChange={e => { setSearch(e.target.value); setPage(0); }}
+              className="w-full pl-10 pr-4 py-2.5 rounded-xl font-exo text-sm text-white outline-none"
+              style={{ background: "#0d1117", border: "1px solid #1e2535" }}
+            />
+          </div>
+          <div className="relative">
+            <Icon name="FolderTree" size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none" />
+            <select
+              value={filterCategoryId}
+              onChange={e => { setFilterCategoryId(e.target.value); setPage(0); }}
+              className="pl-9 pr-4 py-2.5 rounded-xl font-exo text-sm text-white outline-none cursor-pointer"
+              style={{
+                background: "#0d1117",
+                border: `1px solid ${filterCategoryId ? "rgba(168,85,247,0.5)" : "#1e2535"}`,
+                color: filterCategoryId ? "#a855f7" : "#9ca3af",
+                minWidth: 200,
+              }}
+            >
+              <option value="">Все категории</option>
+              {categories.map(c => (
+                <option key={c.id} value={c.id}>
+                  {c.parent_id ? `  └ ${c.name}` : c.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          {filterCategoryId && (
+            <button
+              onClick={() => { setFilterCategoryId(""); setPage(0); }}
+              className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl font-exo text-xs text-gray-400 hover:text-white transition-all flex-shrink-0"
+              style={{ border: "1px solid #1e2535" }}
+            >
+              <Icon name="X" size={12} /> Сбросить
+            </button>
+          )}
         </div>
 
         {/* Table */}
