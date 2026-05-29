@@ -1,16 +1,16 @@
 {
   "tests": [
     {
-      "name": "POST import CSV",
+      "name": "Preview CSV headers",
       "method": "POST",
       "path": "/",
       "body": {
-        "file_base64": "bmFpbWVub3ZhbmllO2FydGlrdWw7dHN2ZXQKVGVzdCBJbXBvcnQ7VEVTVC0wMDE7c2luaXk=",
-        "filename": "test.csv",
-        "photos": []
+        "action": "preview",
+        "file_base64": "bmFpbWVub3ZhbmllO2FydGlrdWw7dHN2ZXQKQ2Fib2xlO0FCTC0wMDE75YaF5a65",
+        "filename": "test.csv"
       },
       "expectedStatus": 200,
-      "expectedBody": {"added": 1},
+      "expectedBody": {"total_rows": 1},
       "bodyMatcher": "partial"
     }
   ]
