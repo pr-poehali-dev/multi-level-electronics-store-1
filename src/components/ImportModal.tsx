@@ -66,10 +66,22 @@ export default function ImportModal({ onClose, onDone }: ImportModalProps) {
     if (!dataFile) return;
     setLoadingPreview(true); setError("");
     try {
+      setLoadingStatus(`Читаем файл...`);
+      // Читаем файл как base64 чанками — надёжнее для больших файлов
+      const arrayBuf = await dataFile.arrayBuffer();
+      const uint8 = new Uint8Array(arrayBuf);
+      let binary = "";
+      const chunkSize = 8192;
+      for (let i = 0; i < uint8.length; i += chunkSize) {
+        binary += String.fromCharCode(...uint8.subarray(i, i + chunkSize));
+      }
+      const file_base64 = btoa(binary);
+
       setLoadingStatus(`Отправляем (${(dataFile.size / 1024 / 1024).toFixed(1)} МБ)...`);
       const res = await fetch(IMPORT_URL, {
         method: "POST",
-        body: buildForm(dataFile, "preview"),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "preview", file_base64, filename: dataFile.name }),
       });
       setLoadingStatus("Обрабатываем...");
       const text = await res.text();
@@ -83,7 +95,9 @@ export default function ImportModal({ onClose, onDone }: ImportModalProps) {
       setStep(1);
     } catch (e) {
       setLoadingPreview(false); setLoadingStatus("");
-      setError(`Ошибка сети: ${e instanceof Error ? e.message : String(e)}`);
+      const msg = e instanceof Error ? e.message : String(e);
+      console.error("Import preview error:", e);
+      setError(`Ошибка: ${msg}`);
     }
   };
 
@@ -91,9 +105,18 @@ export default function ImportModal({ onClose, onDone }: ImportModalProps) {
     if (!dataFile || !preview) return;
     setImporting(true); setError(""); setStep(2);
     try {
+      const arrayBuf = await dataFile.arrayBuffer();
+      const uint8 = new Uint8Array(arrayBuf);
+      let binary = "";
+      const chunkSize = 8192;
+      for (let i = 0; i < uint8.length; i += chunkSize) {
+        binary += String.fromCharCode(...uint8.subarray(i, i + chunkSize));
+      }
+      const file_base64 = btoa(binary);
       const res = await fetch(IMPORT_URL, {
         method: "POST",
-        body: buildForm(dataFile, "import", { mapping: JSON.stringify(mapping) }),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "import", file_base64, filename: dataFile.name, mapping }),
       });
       const data = await res.json();
       setImporting(false);
@@ -101,7 +124,8 @@ export default function ImportModal({ onClose, onDone }: ImportModalProps) {
       setResult(data);
     } catch (e) {
       setImporting(false);
-      setError(`Ошибка сети: ${e instanceof Error ? e.message : String(e)}`);
+      console.error("Import error:", e);
+      setError(`Ошибка: ${e instanceof Error ? e.message : String(e)}`);
       setStep(1);
     }
   };
